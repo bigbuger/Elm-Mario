@@ -1,0 +1,289 @@
+Elm.Main = Elm.Main || {};
+Elm.Main.make = function (_elm) {
+   "use strict";
+   _elm.Main = _elm.Main || {};
+   if (_elm.Main.values) return _elm.Main.values;
+   var _U = Elm.Native.Utils.make(_elm),
+   $Basics = Elm.Basics.make(_elm),
+   $Color = Elm.Color.make(_elm),
+   $Debug = Elm.Debug.make(_elm),
+   $Graphics$Collage = Elm.Graphics.Collage.make(_elm),
+   $Graphics$Element = Elm.Graphics.Element.make(_elm),
+   $Keyboard = Elm.Keyboard.make(_elm),
+   $List = Elm.List.make(_elm),
+   $Maybe = Elm.Maybe.make(_elm),
+   $Result = Elm.Result.make(_elm),
+   $Signal = Elm.Signal.make(_elm),
+   $Time = Elm.Time.make(_elm),
+   $Window = Elm.Window.make(_elm);
+   var _op = {};
+   var sign = function (a) {
+      return _U.cmp(a,0) > 0 ? 1 : _U.cmp(a,0) < 0 ? -1 : 0;
+   };
+   var physics = F2(function (dt,mario) {
+      return _U.update(mario,
+      {x: mario.x + dt * mario.vx
+      ,y: A2($Basics.max,0,mario.y + dt * mario.vy)});
+   });
+   var gravity = F2(function (dt,mario) {
+      return _U.update(mario,
+      {vy: $Basics.not(mario.onGround) ? mario.vy - dt / 4 : 0});
+   });
+   var jump = F2(function (inputs,mario) {
+      return _U.cmp(inputs.y,
+      0) > 0 && mario.onGround ? _U.update(mario,
+      {vy: 4.0,onGround: false}) : _U.cmp(inputs.y,
+      0) > 0 && _U.cmp(mario.vy,0) > 0 ? _U.update(mario,
+      {vy: mario.vy + inputs.dt / 8}) : mario;
+   });
+   var intersect = F2(function (m,b) {
+      var dy = $Basics.abs(m.y - b.y);
+      var dx = $Basics.abs(m.x - b.x);
+      return _U.cmp(dx,m.w / 2 + b.w / 2) < 1 && _U.cmp(dy,
+      m.h / 2 + b.h / 2) < 1;
+   });
+   var pickUp = function (m) {
+      var moneys = m.moneys;
+      var moneys$ = A2($List.filter,
+      function (money) {
+         return A2(intersect,m,money) ? false : true;
+      },
+      moneys);
+      return _U.update(m,{moneys: moneys$});
+   };
+   var land = F2(function (bs,m) {
+      var m$ = A2(physics,1 / 240,m);
+      var collisionResult = A2($List.map,
+      function (b) {
+         return A2(intersect,m$,b) && _U.cmp(m.y,
+         b.y + b.h) > -1 ? {ctor: "_Tuple2"
+                           ,_0: b
+                           ,_1: true} : {ctor: "_Tuple2",_0: b,_1: false};
+      },
+      bs);
+      var _p0 = A3($List.foldl,
+      F2(function (_p2,_p1) {
+         var _p3 = _p2;
+         var _p8 = _p3._1;
+         var _p7 = _p3._0;
+         var _p4 = _p1;
+         var _p6 = _p4._1;
+         var _p5 = _p4._0;
+         return _p8 ? {ctor: "_Tuple2"
+                      ,_0: _p5 || _p8
+                      ,_1: A2($Basics.max,
+                      _p7.y + _p7.h / 2 + m.h / 2,
+                      _p6)} : {ctor: "_Tuple2",_0: _p5 || _p8,_1: _p6};
+      }),
+      {ctor: "_Tuple2",_0: false,_1: m.y},
+      collisionResult);
+      var onBlock = _p0._0;
+      var y$ = _p0._1;
+      return onBlock || _U.eq(m.y,0) ? _U.update(m,
+      {onGround: true
+      ,vy: A2($Basics.max,0,m.vy)
+      ,y: y$}) : _U.update(m,{onGround: false});
+   });
+   var near = F3(function (k,c,n) {
+      return _U.cmp(n,k - c) > -1 && _U.cmp(n,k + c) < 1;
+   });
+   var initialMoneys = function () {
+      var genblock = function (i) {
+         return {x: 20 * 3 * i,y: 60,h: 20,w: 10};
+      };
+      return A2($List.map,genblock,_U.range(0,5));
+   }();
+   var renderMoney = F2(function (groundY,_p9) {
+      var _p10 = _p9;
+      return A2($Graphics$Collage.move,
+      {ctor: "_Tuple2",_0: _p10.x,_1: _p10.y + groundY},
+      $Graphics$Collage.toForm(A3($Graphics$Element.image,
+      20,
+      20,
+      "./imgs/money/money.png")));
+   });
+   var initialBlocks2 = function () {
+      var genblock = function (i) {
+         return {x: 20 * i,y: 40,h: 18,w: 20};
+      };
+      return A2($List.map,genblock,_U.list([1,3,5,7,9]));
+   }();
+   var initialBlocks1 = function () {
+      var genblock = function (i) {
+         return {x: 20 * i,y: 30,h: 18,w: 20};
+      };
+      return A2($List.map,genblock,_U.list([0,4,6,8,10]));
+   }();
+   var initialBlocks = initialBlocks1;
+   var renderBlock = F2(function (groundY,_p11) {
+      var _p12 = _p11;
+      return A2($Graphics$Collage.move,
+      {ctor: "_Tuple2",_0: _p12.x,_1: _p12.y + groundY},
+      $Graphics$Collage.toForm(A3($Graphics$Element.image,
+      20,
+      20,
+      "./imgs/block/block.png")));
+   });
+   var view = F2(function (_p13,mario) {
+      var _p14 = _p13;
+      var _p18 = _p14._0;
+      var _p17 = _p14._1;
+      var dir = function () {
+         var _p15 = mario.dir;
+         if (_p15.ctor === "Left") {
+               return "left";
+            } else {
+               return "right";
+            }
+      }();
+      var verb = $Basics.not(mario.onGround) ? "jump" : !_U.eq(mario.vx,
+      0) ? "walk" : "stand";
+      var src = A2($Basics._op["++"],
+      "./imgs/",
+      A2($Basics._op["++"],
+      verb,
+      A2($Basics._op["++"],"/",A2($Basics._op["++"],dir,".gif"))));
+      var marioImage = A3($Graphics$Element.image,35,35,src);
+      var _p16 = {ctor: "_Tuple2"
+                 ,_0: $Basics.toFloat(_p18)
+                 ,_1: $Basics.toFloat(_p17)};
+      var w = _p16._0;
+      var h = _p16._1;
+      var groundY = 62 - h / 2;
+      var position = {ctor: "_Tuple2"
+                     ,_0: mario.x
+                     ,_1: mario.y + groundY};
+      return A3($Graphics$Collage.collage,
+      _p18,
+      _p17,
+      A2($Basics._op["++"],
+      _U.list([A2($Graphics$Collage.filled,
+              A3($Color.rgb,174,238,238),
+              A2($Graphics$Collage.rect,w,h))
+              ,A2($Graphics$Collage.move,
+              {ctor: "_Tuple2",_0: 0,_1: 24 - h / 2},
+              A2($Graphics$Collage.filled,
+              A3($Color.rgb,74,167,43),
+              A2($Graphics$Collage.rect,w,50)))]),
+      A2($Basics._op["++"],
+      A2($List.map,renderBlock(groundY),mario.blocks),
+      A2($Basics._op["++"],
+      A2($List.map,renderMoney(groundY),mario.moneys),
+      _U.list([A2($Graphics$Collage.move,
+      position,
+      $Graphics$Collage.toForm(marioImage))])))));
+   });
+   var Inputs = F4(function (a,b,c,d) {
+      return {x: a,y: b,foce: c,dt: d};
+   });
+   var input = function () {
+      var delta = A2($Signal.map,
+      function (t) {
+         return t / 20;
+      },
+      $Time.fps(60));
+      return A5($Signal.map4,
+      Inputs,
+      A2($Signal.map,function (_) {    return _.x;},$Keyboard.arrows),
+      A2($Signal.map,function (_) {    return _.y;},$Keyboard.arrows),
+      $Keyboard.space,
+      delta);
+   }();
+   var Right = {ctor: "Right"};
+   var mario = {x: 0
+               ,y: 200
+               ,vx: 0
+               ,vy: 0
+               ,h: 29
+               ,w: 8
+               ,dir: Right
+               ,blocks: initialBlocks
+               ,onGround: true
+               ,moneys: initialMoneys};
+   var Left = {ctor: "Left"};
+   var walk = F2(function (inputs,mario) {
+      var foceV = 3.0;
+      var jumpV = 1.2;
+      var normalV = 1.5;
+      return _U.update(mario,
+      {vx: $Basics.not(mario.onGround) ? !_U.eq(mario.vx,
+      0) ? mario.vx : $Basics.toFloat(inputs.x) * jumpV : $Basics.toFloat(inputs.x) * normalV
+      ,dir: mario.onGround ? _U.cmp(inputs.x,
+      0) < 0 ? Left : _U.cmp(inputs.x,
+      0) > 0 ? Right : mario.dir : mario.dir});
+   });
+   var update = F2(function (inputs,mario) {
+      return pickUp(A2(physics,
+      inputs.dt,
+      A2(land,
+      mario.blocks,
+      A2(gravity,inputs.dt,A2(walk,inputs,A2(jump,inputs,mario))))));
+   });
+   var main = A3($Signal.map2,
+   view,
+   $Window.dimensions,
+   A3($Signal.foldp,update,mario,input));
+   var Money = F4(function (a,b,c,d) {
+      return {x: a,y: b,h: c,w: d};
+   });
+   var Model = function (a) {
+      return function (b) {
+         return function (c) {
+            return function (d) {
+               return function (e) {
+                  return function (f) {
+                     return function (g) {
+                        return function (h) {
+                           return function (i) {
+                              return function (j) {
+                                 return {x: a
+                                        ,y: b
+                                        ,h: c
+                                        ,w: d
+                                        ,vx: e
+                                        ,vy: f
+                                        ,dir: g
+                                        ,blocks: h
+                                        ,onGround: i
+                                        ,moneys: j};
+                              };
+                           };
+                        };
+                     };
+                  };
+               };
+            };
+         };
+      };
+   };
+   var Block = F4(function (a,b,c,d) {
+      return {x: a,y: b,h: c,w: d};
+   });
+   return _elm.Main.values = {_op: _op
+                             ,Block: Block
+                             ,Model: Model
+                             ,Money: Money
+                             ,Left: Left
+                             ,Right: Right
+                             ,Inputs: Inputs
+                             ,renderBlock: renderBlock
+                             ,initialBlocks: initialBlocks
+                             ,initialBlocks1: initialBlocks1
+                             ,initialBlocks2: initialBlocks2
+                             ,renderMoney: renderMoney
+                             ,initialMoneys: initialMoneys
+                             ,mario: mario
+                             ,near: near
+                             ,intersect: intersect
+                             ,update: update
+                             ,pickUp: pickUp
+                             ,jump: jump
+                             ,gravity: gravity
+                             ,physics: physics
+                             ,walk: walk
+                             ,sign: sign
+                             ,land: land
+                             ,view: view
+                             ,main: main
+                             ,input: input};
+};
